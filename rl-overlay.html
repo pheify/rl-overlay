@@ -90,17 +90,12 @@
     line-height: 1;
   }
 
-  .mode-row {
-    display: flex; align-items: center; gap: 4px;
-    margin-top: 2px;
-  }
-  .mode-icon { font-size: 10px; }
-  .mode-name {
+  .session-tag {
     font-family: 'Nunito Sans', sans-serif;
     font-size: 10px; font-weight: 700;
-    color: #ff9a3c;
+    color: rgba(255, 107, 0, 0.6);
     letter-spacing: 0.06em; text-transform: uppercase;
-    transition: color .4s;
+    margin-top: 2px;
   }
 
   .live-pip {
@@ -249,10 +244,7 @@
     <div class="logo">🚀</div>
     <div class="name-block">
       <div class="player-name skel" id="playerName">——————</div>
-      <div class="mode-row">
-        <span class="mode-icon" id="modeIcon">🔍</span>
-        <span class="mode-name" id="modeName">Detecting…</span>
-      </div>
+      <div class="session-tag">Session Tracker</div>
     </div>
     <div class="live-pip"></div>
   </div>
@@ -366,15 +358,12 @@ function processMatches(items) {
     return t >= startTime;
   });
 
-  // auto-detect playlist
+  // auto-detect playlist (still used for rank segment matching, silently)
   if (relevant.length) {
     const pid = +(relevant[0].attributes?.playlistId ?? relevant[0].metadata?.playlistId ?? 0);
     if (pid && pid !== detectedPid) {
       detectedPid = pid;
-      const pl = PLAYLISTS[pid] ?? { name:`Playlist ${pid}`, icon:"🎮" };
-      $("modeIcon").textContent = pl.icon;
-      $("modeName").textContent = pl.name;
-      startMMR = null; // reset baseline on mode switch
+      startMMR = null; // reset MMR baseline on mode switch
     }
   }
 
@@ -410,9 +399,15 @@ function processMatches(items) {
 }
 
 function renderRank(segments, pid) {
-  const seg = pid
+  // Always try detected playlist first, then fall back to highest MMR ranked playlist
+  const seg = (pid
     ? segments.find(s => s.type==="playlist" && +s.attributes?.playlistId===pid)
-    : segments.find(s => s.type==="playlist");
+    : null)
+    ?? segments
+        .filter(s => s.type==="playlist" && (s.stats?.rating?.value ?? 0) > 0)
+        .sort((a,b) => (b.stats?.rating?.value??0) - (a.stats?.rating?.value??0))[0]
+    ?? segments.find(s => s.type==="playlist");
+
   if (!seg) return null;
 
   const mmr  = Math.round(seg.stats?.rating?.value ?? 0);
