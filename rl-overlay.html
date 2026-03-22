@@ -293,11 +293,11 @@
 
 <script>
 // ============================================================
-//  ⚙  CONFIG — edit these 3 lines
+//  ⚙  CONFIG
 // ============================================================
-const API_KEY   = "65ff3423-fb71-4395-8634-35c4a3f8d828";
-const PLAYER_ID = "Pheify";
-const PLATFORM  = "epic"; // epic | steam | psn | xbl
+const WORKER_URL = "https://still-dew-5b37.pheify.workers.dev";
+const PLAYER_ID  = "Pheify";
+const PLATFORM   = "epic";
 // ============================================================
 
 const POLL_MS = 60_000;
@@ -344,10 +344,7 @@ function toast(icon, msg, dur = 3800) {
 }
 
 async function api(path) {
-  const r = await fetch(
-    `https://public-api.tracker.gg/v2/rocket-league/standard${path}`,
-    { headers: { "TRN-Api-Key": API_KEY } }
-  );
+  const r = await fetch(`${WORKER_URL}${path}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
