@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RL Overlay</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Nunito+Sans:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+  /* ─── reset ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: transparent;
+    width: 100vw; height: 100vh;
+    font-family: 'Nunito', sans-serif;
+    /* overlay sits bottom-left to mirror Pulsely top-right energy */
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 18px;
+  }
+
+  /* ─── outer wrapper: slim horizontal pill ─── */
+  .card {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0;
+    width: 210px;
+    border-radius: 16px;
+    overflow: hidden;
+    /* dark semi-transparent base so gameplay bleeds through */
+    background: rgba(15, 12, 10, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 107, 0, 0.35);
+    box-shadow:
+      0 4px 24px rgba(0,0,0,0.55),
+      0 0 0 1px rgba(255,107,0,0.08),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    animation: popIn .5s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+
+  @keyframes popIn {
+    from { opacity:0; transform: scale(0.88) translateY(12px); }
+    to   { opacity:1; transform: scale(1)    translateY(0); }
+  }
+
+  /* top orange bar — mirrors Pulsely's brand colour exactly */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #ff6b00, #ff9a3c, #ff6b00);
+    background-size: 200% 100%;
+    animation: slide 2.5s linear infinite;
+  }
+  @keyframes slide {
+    0%   { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
+  }
+
+  /* ─── header row: logo + player + live dot ─── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 12px 6px;
+  }
+
+  .logo {
+    width: 26px; height: 26px;
+    background: #ff6b00;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px rgba(255,107,0,0.45);
+  }
+
+  .name-block { flex: 1; min-width: 0; }
+
+  .player-name {
+    font-size: 13px; font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .mode-row {
+    display: flex; align-items: center; gap: 4px;
+    margin-top: 2px;
+  }
+  .mode-icon { font-size: 10px; }
+  .mode-name {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 10px; font-weight: 700;
+    color: #ff9a3c;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    transition: color .4s;
+  }
+
+  .live-pip {
+    width: 6px; height: 6px;
+    background: #ff4444;
+    border-radius: 50%;
+    box-shadow: 0 0 5px #ff4444;
+    flex-shrink: 0;
+    animation: pip 1.3s ease-in-out infinite;
+  }
+  @keyframes pip {
+    0%,100% { opacity:1; }
+    50%      { opacity:.3; }
+  }
+
+  /* ─── divider ─── */
+  .divider {
+    height: 1px;
+    background: rgba(255,107,0,0.15);
+    margin: 0 10px;
+  }
+
+  /* ─── stats row ─── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1px 1fr 1px 1fr;
+    align-items: center;
+    padding: 8px 8px 10px;
+    gap: 0;
+  }
+
+  .vline {
+    width: 1px; height: 28px;
+    background: rgba(255,107,0,0.15);
+    justify-self: center;
+  }
+
+  .stat {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 1px;
+  }
+
+  .stat-val {
+    font-size: 26px; font-weight: 900;
+    line-height: 1;
+    transition: transform .3s cubic-bezier(0.34,1.56,0.64,1), color .3s;
+  }
+  .stat-val.bump { animation: bump .45s cubic-bezier(0.34,1.56,0.64,1); }
+  @keyframes bump {
+    0%  { transform: scale(1); }
+    45% { transform: scale(1.45); }
+    100%{ transform: scale(1); }
+  }
+
+  .stat.wins  .stat-val { color: #ff6b00; }     /* orange — matches Pulsely */
+  .stat.losses .stat-val { color: rgba(255,255,255,0.55); }
+  .stat.streak .stat-val { color: #ff9a3c; }
+
+  .stat-lbl {
+    font-family: 'Nunito Sans', sans-serif;
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* ─── MMR strip ─── */
+  .mmr-strip {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 12px 9px;
+  }
+
+  .mmr-left {
+    display: flex; align-items: center; gap: 5px;
+  }
+  .rank-pip {
+    font-size: 14px; line-height: 1;
+  }
+  .rank-name {
+    font-size: 11px; font-weight: 800;
+    color: rgba(255,255,255,0.75);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  .mmr-right {
+    display: flex; align-items: center; gap: 5px;
+  }
+  .mmr-num {
+    font-size: 12px; font-weight: 900;
+    color: rgba(255,255,255,0.45);
+    font-family: 'Nunito Sans', sans-serif;
+  }
+  .mmr-delta {
+    font-size: 12px; font-weight: 900;
+    font-family: 'Nunito Sans', sans-serif;
+    transition: color .4s;
+    min-width: 34px; text-align: right;
+  }
+  .mmr-delta.pos { color: #ff6b00; }
+  .mmr-delta.neg { color: rgba(255,255,255,0.4); }
+  .mmr-delta.neu { color: rgba(255,255,255,0.2); }
+
+  /* ─── skeleton loader ─── */
+  .skel {
+    background: linear-gradient(90deg,
+      rgba(255,255,255,0.04) 0%,
+      rgba(255,255,255,0.10) 50%,
+      rgba(255,255,255,0.04) 100%);
+    background-size: 200% 100%;
+    animation: sk 1.5s ease-in-out infinite;
+    border-radius: 4px; color: transparent !important;
+  }
+  @keyframes sk {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ─── toast ─── */
+  .toast {
+    position: fixed;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: rgba(15,12,10,0.96);
+    border: 1.5px solid #ff6b00;
+    border-radius: 40px;
+    padding: 8px 18px 8px 12px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 800; color: #fff;
+    box-shadow: 0 0 20px rgba(255,107,0,0.3), 0 6px 24px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: transform .4s cubic-bezier(0.34,1.56,0.64,1), opacity .3s;
+    pointer-events: none; z-index: 99; white-space: nowrap;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast-icon { font-size: 18px; }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+
+  <!-- header -->
+  <div class="header">
+    <div class="logo">🚀</div>
+    <div class="name-block">
+      <div class="player-name skel" id="playerName">——————</div>
+      <div class="mode-row">
+        <span class="mode-icon" id="modeIcon">🔍</span>
+        <span class="mode-name" id="modeName">Detecting…</span>
+      </div>
+    </div>
+    <div class="live-pip"></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- W / L / Streak -->
+  <div class="stats">
+    <div class="stat wins">
+      <div class="stat-val" id="wVal">0</div>
+      <div class="stat-lbl">Wins</div>
+    </div>
+    <div class="vline"></div>
+    <div class="stat losses">
+      <div class="stat-val" id="lVal">0</div>
+      <div class="stat-lbl">Losses</div>
+    </div>
+    <div class="vline"></div>
+    <div class="stat streak">
+      <div class="stat-val" id="sVal">0</div>
+      <div class="stat-lbl" id="sLbl">Streak</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- rank + MMR -->
+  <div class="mmr-strip">
+    <div class="mmr-left">
+      <span class="rank-pip" id="rankPip">⏳</span>
+      <span class="rank-name skel" id="rankName">Loading</span>
+    </div>
+    <div class="mmr-right">
+      <span class="mmr-num skel" id="mmrNum">——</span>
+      <span class="mmr-delta neu" id="mmrDelta">+0</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="tIcon">🏆</span>
+  <span id="tMsg">Nice!</span>
+</div>
+
+<script>
+// ============================================================
+//  ⚙  CONFIG — edit these 3 lines
+// ============================================================
+const API_KEY   = "65ff3423-fb71-4395-8634-35c4a3f8d828";
+const PLAYER_ID = "Pheify";
+const PLATFORM  = "epic"; // epic | steam | psn | xbl
+// ============================================================
+
+const POLL_MS = 60_000;
+
+const PLAYLISTS = {
+  10: { name:"Duel 1v1",     icon:"🎯" },
+  11: { name:"Doubles 2v2",  icon:"⚡" },
+  13: { name:"Standard 3v3", icon:"🏟" },
+  34: { name:"Solo Std",     icon:"🌀" },
+};
+
+const RANK_EMOJI = {
+  "Unranked":"⬜","Bronze I":"🟫","Bronze II":"🟫","Bronze III":"🟫",
+  "Silver I":"⬜","Silver II":"⬜","Silver III":"⬜",
+  "Gold I":"🟡","Gold II":"🟡","Gold III":"🟡",
+  "Platinum I":"🔵","Platinum II":"🔵","Platinum III":"🔵",
+  "Diamond I":"💎","Diamond II":"💎","Diamond III":"💎",
+  "Champion I":"🏆","Champion II":"🏆","Champion III":"🏆",
+  "Grand Champion I":"👑","Grand Champion II":"👑","Grand Champion III":"👑",
+  "Supersonic Legend":"🌟",
+};
+
+let detectedPid   = null;
+let startMMR      = null;
+let startTime     = Date.now();
+let lastMatchId   = null;
+
+const $ = id => document.getElementById(id);
+const fmt = n => n > 0 ? `+${n}` : `${n}`;
+
+function bump(id) {
+  const el = $(id);
+  el.classList.remove("bump");
+  void el.offsetWidth;
+  el.classList.add("bump");
+}
+
+function toast(icon, msg, dur = 3800) {
+  $("tIcon").textContent = icon;
+  $("tMsg").textContent  = msg;
+  const t = $("toast");
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), dur);
+}
+
+async function api(path) {
+  const r = await fetch(
+    `https://public-api.tracker.gg/v2/rocket-league/standard${path}`,
+    { headers: { "TRN-Api-Key": API_KEY } }
+  );
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function processMatches(items) {
+  const relevant = items.filter(m => {
+    const t = new Date(m.metadata?.dateCollected ?? m.attributes?.createdAt ?? 0).getTime();
+    return t >= startTime;
+  });
+
+  // auto-detect playlist
+  if (relevant.length) {
+    const pid = +(relevant[0].attributes?.playlistId ?? relevant[0].metadata?.playlistId ?? 0);
+    if (pid && pid !== detectedPid) {
+      detectedPid = pid;
+      const pl = PLAYLISTS[pid] ?? { name:`Playlist ${pid}`, icon:"🎮" };
+      $("modeIcon").textContent = pl.icon;
+      $("modeName").textContent = pl.name;
+      startMMR = null; // reset baseline on mode switch
+    }
+  }
+
+  // rebuild stats
+  let w=0, l=0, str=0, sType=null;
+  [...relevant].reverse().forEach(m => {
+    const raw = m.metadata?.result ?? m.stats?.result?.value ?? "";
+    const won = typeof raw === "string" ? raw.toLowerCase()==="victory" : raw===1;
+    if (won) { w++; sType==="w" ? str++ : (sType="w", str=1); }
+    else     { l++; sType==="l" ? str++ : (sType="l", str=1); }
+  });
+
+  // detect new match
+  const nid = relevant[0]?.attributes?.id ?? relevant[0]?.id;
+  if (nid && nid !== lastMatchId) {
+    const raw = relevant[0].metadata?.result ?? relevant[0].stats?.result?.value ?? "";
+    const won = typeof raw === "string" ? raw.toLowerCase()==="victory" : raw===1;
+    bump(won ? "wVal" : "lVal");
+    bump("sVal");
+    toast(won ? "🏆" : "💀", won ? "WIN! 🎯 Let's go!" : "L. Run it back 🔁");
+    lastMatchId = nid;
+  }
+
+  $("wVal").textContent = w;
+  $("lVal").textContent = l;
+
+  const streak = sType==="w" ? str : sType==="l" ? -str : 0;
+  $("sVal").textContent = Math.abs(streak);
+  $("sVal").style.color = streak > 0 ? "#ff6b00" : streak < 0 ? "rgba(255,255,255,0.45)" : "#ff9a3c";
+  $("sLbl").textContent = streak > 0 ? "W Streak" : streak < 0 ? "L Streak" : "Streak";
+
+  return detectedPid;
+}
+
+function renderRank(segments, pid) {
+  const seg = pid
+    ? segments.find(s => s.type==="playlist" && +s.attributes?.playlistId===pid)
+    : segments.find(s => s.type==="playlist");
+  if (!seg) return null;
+
+  const mmr  = Math.round(seg.stats?.rating?.value ?? 0);
+  const tier = seg.stats?.tier?.metadata?.name ?? "Unranked";
+
+  $("rankPip").textContent  = RANK_EMOJI[tier] ?? "🎮";
+  $("rankName").textContent = tier;
+  $("rankName").classList.remove("skel");
+  $("mmrNum").textContent   = mmr + " MMR";
+  $("mmrNum").classList.remove("skel");
+
+  return mmr;
+}
+
+async function poll() {
+  try {
+    const base = `/profile/${PLATFORM}/${encodeURIComponent(PLAYER_ID)}`;
+    const [prof, sess] = await Promise.all([api(base), api(`${base}/sessions`)]);
+
+    const handle = prof?.data?.platformInfo?.platformUserHandle ?? PLAYER_ID;
+    $("playerName").textContent = handle;
+    $("playerName").classList.remove("skel");
+
+    processMatches(sess?.data?.items ?? []);
+
+    const mmr = renderRank(prof?.data?.segments ?? [], detectedPid);
+    if (mmr !== null) {
+      if (startMMR === null) startMMR = mmr;
+      const d = mmr - startMMR;
+      $("mmrDelta").textContent = fmt(d);
+      $("mmrDelta").className = `mmr-delta ${d>0?"pos":d<0?"neg":"neu"}`;
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+(async () => {
+  startTime = Date.now();
+  await poll();
+  setInterval(poll, POLL_MS);
+})();
+</script>
+</body>
+</html>
